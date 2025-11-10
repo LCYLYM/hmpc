@@ -10,6 +10,14 @@
     <string name="activate_pc_mode">激活 PC 模式</string>
     <string name="deactivate_pc_mode">停用 PC 模式</string>
     <string name="hint">注意: 此功能需要授予屏幕录制权限。某些设备可能不支持此功能。</string>
+    <string name="profile_label">显示配置:</string>
+    <string name="profile_typec">Type-C 外接显示器 (1080p)</string>
+    <string name="profile_wireless">无线投屏 (720p)</string>
+    <string name="profile_large_monitor">桌面显示器 (4K)</string>
+    <string name="profile_small_panel">便携小屏 (1280x800)</string>
+    <string name="preview_toggle">预览虚拟显示内容</string>
+    <string name="preview_unavailable">暂无画面,请确认 PC 模式已激活。</string>
+    <string name="preview_label">虚拟显示预览</string>
     
     <!-- 通知 -->
     <string name="notification_title">PC 模式已激活</string>
@@ -20,4 +28,6 @@
     <string name="toast_virtual_display_failed">创建虚拟显示器失败: %1$s</string>
     <string name="toast_virtual_display_not_running">虚拟显示器未运行</string>
     <string name="toast_media_projection_lost">屏幕录制权限已被撤销,虚拟显示器已停止</string>
+    <string name="toast_preview_enabled">预览已开启</string>
+    <string name="toast_preview_disabled">预览已关闭</string>
 </resources>

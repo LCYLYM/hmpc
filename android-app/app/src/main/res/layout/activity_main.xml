@@ -40,7 +40,23 @@
         android:text="@string/status_inactive"
         android:textSize="16sp"
         android:textColor="#666666"
-        android:layout_marginBottom="24dp" />
+        android:layout_marginBottom="16dp" />
+
+    <!-- 显示配置 -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/profile_label"
+        android:textSize="14sp"
+        android:textColor="#444444"
+        android:layout_marginBottom="4dp" />
+
+    <Spinner
+        android:id="@+id/profileSpinner"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="16dp"
+        android:spinnerMode="dropdown" />
 
     <!-- 激活按钮 -->
     <Button
@@ -50,7 +66,7 @@
         android:text="@string/activate_pc_mode"
         android:textSize="16sp"
         android:padding="16dp"
-        android:layout_marginBottom="16dp" />
+        android:layout_marginBottom="12dp" />
 
     <!-- 停用按钮 -->
     <Button
@@ -60,7 +76,57 @@
         android:text="@string/deactivate_pc_mode"
         android:textSize="16sp"
         android:padding="16dp"
-        android:enabled="false" />
+        android:enabled="false"
+        android:layout_marginBottom="16dp" />
+
+    <!-- 预览开关 -->
+    <com.google.android.material.switchmaterial.SwitchMaterial
+        android:id="@+id/previewSwitch"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/preview_toggle"
+        android:enabled="false"
+        android:layout_marginBottom="16dp" />
+
+    <!-- 预览区 -->
+    <LinearLayout
+        android:id="@+id/previewContainer"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:orientation="vertical"
+        android:layout_weight="1"
+        android:background="#F5F5F5"
+        android:padding="12dp"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/preview_label"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:textColor="#333333"
+            android:layout_marginBottom="8dp" />
+
+        <ImageView
+            android:id="@+id/previewImage"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:scaleType="fitCenter"
+            android:contentDescription="@string/preview_label"
+            android:background="#FFFFFF" />
+
+        <TextView
+            android:id="@+id/previewPlaceholder"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/preview_unavailable"
+            android:textSize="12sp"
+            android:textColor="#666666"
+            android:gravity="center"
+            android:layout_marginTop="8dp" />
+    </LinearLayout>
 
     <!-- 提示信息 -->
     <TextView
@@ -70,6 +136,6 @@
         android:textSize="12sp"
         android:textColor="#999999"
         android:gravity="center"
-        android:layout_marginTop="32dp" />
+        android:layout_marginTop="16dp" />
 
 </LinearLayout>

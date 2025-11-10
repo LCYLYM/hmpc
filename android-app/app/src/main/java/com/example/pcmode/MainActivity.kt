@@ -9,13 +9,20 @@ import android.media.projection.MediaProjectionManager
 import android.os.Bundle
 import android.os.Build
 import android.widget.Button
+import android.view.View
+import android.widget.ArrayAdapter
+import android.widget.Button
+import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.Spinner
 import android.widget.TextView
-import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 
+import com.google.android.material.switchmaterial.SwitchMaterial
 private const val RECEIVER_ACTION = VirtualDisplayService.ACTION_STATE_CHANGED
-
+private const val RECEIVER_STATE_ACTION = VirtualDisplayService.ACTION_STATE_CHANGED
+private const val RECEIVER_PREVIEW_ACTION = VirtualDisplayService.ACTION_PREVIEW_FRAME
 /**
  * 主界面
  * 负责请求权限和启动虚拟显示服务
@@ -27,13 +34,23 @@ class MainActivity : AppCompatActivity() {
     private lateinit var activateButton: Button
     private lateinit var deactivateButton: Button
     private var lastKnownServiceState = false
+    private lateinit var previewSwitch: SwitchMaterial
+    private lateinit var previewContainer: LinearLayout
+    private lateinit var previewImage: ImageView
+    private lateinit var previewPlaceholder: TextView
+    private lateinit var profileSpinner: Spinner
+    private lateinit var profileAdapter: ArrayAdapter<String>
     private var isReceiverRegistered = false
 
     private val serviceStateReceiver = object : BroadcastReceiver() {
+    private var isPreviewReceiverRegistered = false
+    private var previewEnabled = false
+    private var currentProfileIndex = 0
+    private val displayProfiles = DisplayProfile.defaultProfiles()
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action != RECEIVER_ACTION) return
 
-            val isRunning = intent.getBooleanExtra(VirtualDisplayService.EXTRA_IS_RUNNING, false)
+            if (intent?.action != RECEIVER_STATE_ACTION) return
             val statusMessage = intent.getStringExtra(VirtualDisplayService.EXTRA_STATUS_MESSAGE)
             val errorMessage = intent.getStringExtra(VirtualDisplayService.EXTRA_ERROR_MESSAGE)
 
@@ -47,6 +64,12 @@ class MainActivity : AppCompatActivity() {
             deactivateButton.isEnabled = isRunning
 
             when {
+            previewSwitch.isEnabled = isRunning
+            if (!isRunning) {
+                previewSwitch.isChecked = false
+                previewEnabled = false
+                togglePreviewContainer(false)
+            }
                 errorMessage != null -> Toast.makeText(this@MainActivity, errorMessage, Toast.LENGTH_LONG).show()
                 isRunning && !lastKnownServiceState -> Toast.makeText(
                     this@MainActivity,
@@ -61,6 +84,28 @@ class MainActivity : AppCompatActivity() {
             }
 
             lastKnownServiceState = isRunning
+        }
+    }
+
+    private val previewFrameReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != RECEIVER_PREVIEW_ACTION) return
+
+            val frameData = intent.getByteArrayExtra(VirtualDisplayService.EXTRA_PREVIEW_FRAME)
+            if (frameData == null || frameData.isEmpty()) {
+                previewImage.setImageDrawable(null)
+                previewPlaceholder.visibility = View.VISIBLE
+                return
+            }
+
+            val bitmap = android.graphics.BitmapFactory.decodeByteArray(frameData, 0, frameData.size)
+            if (bitmap != null) {
+                previewPlaceholder.visibility = View.GONE
+                previewImage.setImageBitmap(bitmap)
+            } else {
+                previewImage.setImageDrawable(null)
+                previewPlaceholder.visibility = View.VISIBLE
+            }
         }
     }
 
@@ -80,6 +125,13 @@ class MainActivity : AppCompatActivity() {
         statusText = findViewById(R.id.statusText)
         activateButton = findViewById(R.id.activateButton)
         deactivateButton = findViewById(R.id.deactivateButton)
+        previewSwitch = findViewById(R.id.previewSwitch)
+        previewContainer = findViewById(R.id.previewContainer)
+        previewImage = findViewById(R.id.previewImage)
+        previewPlaceholder = findViewById(R.id.previewPlaceholder)
+        profileSpinner = findViewById(R.id.profileSpinner)
+
+        initProfileSpinner()
 
         // 设置按钮点击事件
         activateButton.setOnClickListener {
@@ -90,16 +142,35 @@ class MainActivity : AppCompatActivity() {
             stopVirtualDisplay()
         }
 
+        previewSwitch.setOnCheckedChangeListener { _, isChecked ->
+            if (!VirtualDisplayService.isRunning) {
+                previewSwitch.isChecked = false
+                Toast.makeText(this, getString(R.string.toast_virtual_display_not_running), Toast.LENGTH_SHORT).show()
+                return@setOnCheckedChangeListener
+            }
+
+            previewEnabled = isChecked
+            togglePreviewContainer(isChecked)
+            sendPreviewToggle(isChecked)
+            Toast.makeText(
+                this,
+                if (isChecked) getString(R.string.toast_preview_enabled) else getString(R.string.toast_preview_disabled),
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+
         updateUI()
     }
 
     override fun onStart() {
         super.onStart()
         registerServiceStateReceiver()
+        registerPreviewReceiver()
     }
 
     override fun onStop() {
         super.onStop()
+        unregisterPreviewReceiver()
         unregisterServiceStateReceiver()
     }
 
@@ -131,8 +202,14 @@ class MainActivity : AppCompatActivity() {
      */
     private fun startVirtualDisplayService(resultCode: Int, data: Intent) {
         val serviceIntent = Intent(this, VirtualDisplayService::class.java).apply {
+            action = VirtualDisplayService.ACTION_START
             putExtra(VirtualDisplayService.EXTRA_RESULT_CODE, resultCode)
             putExtra(VirtualDisplayService.EXTRA_RESULT_DATA, data)
+            putExtra(VirtualDisplayService.EXTRA_PROFILE_ID, displayProfiles[currentProfileIndex].id)
+            putExtra(VirtualDisplayService.EXTRA_PROFILE_WIDTH, displayProfiles[currentProfileIndex].width)
+            putExtra(VirtualDisplayService.EXTRA_PROFILE_HEIGHT, displayProfiles[currentProfileIndex].height)
+            putExtra(VirtualDisplayService.EXTRA_PROFILE_DPI, displayProfiles[currentProfileIndex].dpi)
+            putExtra(VirtualDisplayService.EXTRA_PROFILE_FLAGS, displayProfiles[currentProfileIndex].flags)
         }
         
         ContextCompat.startForegroundService(this, serviceIntent)
@@ -140,6 +217,7 @@ class MainActivity : AppCompatActivity() {
         statusText.text = getString(R.string.status_pending)
         activateButton.isEnabled = false
         deactivateButton.isEnabled = false
+        previewSwitch.isEnabled = false
     }
 
     /**
@@ -163,12 +241,19 @@ class MainActivity : AppCompatActivity() {
         val isServiceRunning = VirtualDisplayService.isRunning
         activateButton.isEnabled = !isServiceRunning
         deactivateButton.isEnabled = isServiceRunning
+        previewSwitch.isEnabled = isServiceRunning
+        profileSpinner.isEnabled = !isServiceRunning
         statusText.text = if (isServiceRunning) {
             getString(R.string.status_active)
         } else {
             getString(R.string.status_inactive)
         }
         lastKnownServiceState = isServiceRunning
+        if (!isServiceRunning) {
+            previewSwitch.isChecked = false
+            previewEnabled = false
+            togglePreviewContainer(false)
+        }
     }
 
     override fun onResume() {
@@ -178,7 +263,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun registerServiceStateReceiver() {
         if (isReceiverRegistered) return
-        val intentFilter = IntentFilter(RECEIVER_ACTION)
+        val intentFilter = IntentFilter(RECEIVER_STATE_ACTION)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(serviceStateReceiver, intentFilter, Context.RECEIVER_NOT_EXPORTED)
         } else {
@@ -192,5 +277,59 @@ class MainActivity : AppCompatActivity() {
         if (!isReceiverRegistered) return
         unregisterReceiver(serviceStateReceiver)
         isReceiverRegistered = false
+    }
+
+    private fun registerPreviewReceiver() {
+        if (isPreviewReceiverRegistered) return
+        val intentFilter = IntentFilter(RECEIVER_PREVIEW_ACTION)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(previewFrameReceiver, intentFilter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("DEPRECATION")
+            registerReceiver(previewFrameReceiver, intentFilter)
+        }
+        isPreviewReceiverRegistered = true
+    }
+
+    private fun unregisterPreviewReceiver() {
+        if (!isPreviewReceiverRegistered) return
+        unregisterReceiver(previewFrameReceiver)
+        isPreviewReceiverRegistered = false
+    }
+
+    private fun sendPreviewToggle(enabled: Boolean) {
+        val intent = Intent(this, VirtualDisplayService::class.java).apply {
+            action = if (enabled) VirtualDisplayService.ACTION_ENABLE_PREVIEW else VirtualDisplayService.ACTION_DISABLE_PREVIEW
+        }
+        startService(intent)
+    }
+
+    private fun togglePreviewContainer(show: Boolean) {
+        previewContainer.visibility = if (show) View.VISIBLE else View.GONE
+        if (!show) {
+            previewImage.setImageDrawable(null)
+            previewPlaceholder.visibility = View.VISIBLE
+        }
+    }
+
+    private fun initProfileSpinner() {
+        val labels = displayProfiles.map { getString(it.labelRes) }
+        profileAdapter = ArrayAdapter(
+            this,
+            android.R.layout.simple_spinner_item,
+            labels
+        ).also {
+            it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        }
+        profileSpinner.adapter = profileAdapter
+        profileSpinner.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: View?, position: Int, id: Long) {
+                currentProfileIndex = position
+            }
+
+            override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {
+                // no-op
+            }
+        }
     }
 }
