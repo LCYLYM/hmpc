@@ -1,13 +1,20 @@
 package com.example.pcmode
 
 import android.app.Activity
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.media.projection.MediaProjectionManager
 import android.os.Bundle
+import android.os.Build
 import android.widget.Button
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
+
+private const val RECEIVER_ACTION = VirtualDisplayService.ACTION_STATE_CHANGED
 
 /**
  * 主界面
@@ -19,6 +26,43 @@ class MainActivity : AppCompatActivity() {
     private lateinit var statusText: TextView
     private lateinit var activateButton: Button
     private lateinit var deactivateButton: Button
+    private var lastKnownServiceState = false
+    private var isReceiverRegistered = false
+
+    private val serviceStateReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != RECEIVER_ACTION) return
+
+            val isRunning = intent.getBooleanExtra(VirtualDisplayService.EXTRA_IS_RUNNING, false)
+            val statusMessage = intent.getStringExtra(VirtualDisplayService.EXTRA_STATUS_MESSAGE)
+            val errorMessage = intent.getStringExtra(VirtualDisplayService.EXTRA_ERROR_MESSAGE)
+
+            statusText.text = statusMessage ?: if (isRunning) {
+                getString(R.string.status_active)
+            } else {
+                getString(R.string.status_inactive)
+            }
+
+            activateButton.isEnabled = !isRunning
+            deactivateButton.isEnabled = isRunning
+
+            when {
+                errorMessage != null -> Toast.makeText(this@MainActivity, errorMessage, Toast.LENGTH_LONG).show()
+                isRunning && !lastKnownServiceState -> Toast.makeText(
+                    this@MainActivity,
+                    getString(R.string.toast_virtual_display_started),
+                    Toast.LENGTH_SHORT
+                ).show()
+                !isRunning && lastKnownServiceState -> Toast.makeText(
+                    this@MainActivity,
+                    getString(R.string.toast_virtual_display_stopped),
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+
+            lastKnownServiceState = isRunning
+        }
+    }
 
     companion object {
         private const val REQUEST_MEDIA_PROJECTION = 1001
@@ -49,6 +93,16 @@ class MainActivity : AppCompatActivity() {
         updateUI()
     }
 
+    override fun onStart() {
+        super.onStart()
+        registerServiceStateReceiver()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        unregisterServiceStateReceiver()
+    }
+
     /**
      * 请求 MediaProjection 权限
      */
@@ -66,7 +120,7 @@ class MainActivity : AppCompatActivity() {
                 startVirtualDisplayService(resultCode, data)
             } else {
                 // 用户拒绝权限
-                Toast.makeText(this, "需要屏幕录制权限才能激活 PC 模式", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, getString(R.string.toast_media_projection_required), Toast.LENGTH_LONG).show()
                 updateUI()
             }
         }
@@ -77,16 +131,15 @@ class MainActivity : AppCompatActivity() {
      */
     private fun startVirtualDisplayService(resultCode: Int, data: Intent) {
         val serviceIntent = Intent(this, VirtualDisplayService::class.java).apply {
-            putExtra("resultCode", resultCode)
-            putExtra("data", data)
+            putExtra(VirtualDisplayService.EXTRA_RESULT_CODE, resultCode)
+            putExtra(VirtualDisplayService.EXTRA_RESULT_DATA, data)
         }
         
-        startForegroundService(serviceIntent)
-        
-        statusText.text = "状态: PC 模式已激活"
-        updateUI()
-        
-        Toast.makeText(this, "虚拟显示器已创建,尝试激活 PC 模式", Toast.LENGTH_SHORT).show()
+        ContextCompat.startForegroundService(this, serviceIntent)
+
+        statusText.text = getString(R.string.status_pending)
+        activateButton.isEnabled = false
+        deactivateButton.isEnabled = false
     }
 
     /**
@@ -94,12 +147,13 @@ class MainActivity : AppCompatActivity() {
      */
     private fun stopVirtualDisplay() {
         val serviceIntent = Intent(this, VirtualDisplayService::class.java)
+        val wasRunning = VirtualDisplayService.isRunning
         stopService(serviceIntent)
-        
-        statusText.text = "状态: 未激活"
-        updateUI()
-        
-        Toast.makeText(this, "已停止虚拟显示器", Toast.LENGTH_SHORT).show()
+
+        if (!wasRunning) {
+            Toast.makeText(this, getString(R.string.toast_virtual_display_not_running), Toast.LENGTH_SHORT).show()
+            updateUI()
+        }
     }
 
     /**
@@ -109,14 +163,34 @@ class MainActivity : AppCompatActivity() {
         val isServiceRunning = VirtualDisplayService.isRunning
         activateButton.isEnabled = !isServiceRunning
         deactivateButton.isEnabled = isServiceRunning
-        
-        if (!isServiceRunning) {
-            statusText.text = "状态: 未激活"
+        statusText.text = if (isServiceRunning) {
+            getString(R.string.status_active)
+        } else {
+            getString(R.string.status_inactive)
         }
+        lastKnownServiceState = isServiceRunning
     }
 
     override fun onResume() {
         super.onResume()
         updateUI()
+    }
+
+    private fun registerServiceStateReceiver() {
+        if (isReceiverRegistered) return
+        val intentFilter = IntentFilter(RECEIVER_ACTION)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(serviceStateReceiver, intentFilter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("DEPRECATION")
+            registerReceiver(serviceStateReceiver, intentFilter)
+        }
+        isReceiverRegistered = true
+    }
+
+    private fun unregisterServiceStateReceiver() {
+        if (!isReceiverRegistered) return
+        unregisterReceiver(serviceStateReceiver)
+        isReceiverRegistered = false
     }
 }

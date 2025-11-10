@@ -5,6 +5,8 @@
     <!-- 主界面 -->
     <string name="description">通过创建虚拟显示器来激活平板的 PC 模式,无需连接外部显示器</string>
     <string name="status_inactive">状态: 未激活</string>
+    <string name="status_active">状态: PC 模式已激活</string>
+    <string name="status_pending">状态: 正在尝试激活 PC 模式...</string>
     <string name="activate_pc_mode">激活 PC 模式</string>
     <string name="deactivate_pc_mode">停用 PC 模式</string>
     <string name="hint">注意: 此功能需要授予屏幕录制权限。某些设备可能不支持此功能。</string>
@@ -12,4 +14,10 @@
     <!-- 通知 -->
     <string name="notification_title">PC 模式已激活</string>
     <string name="notification_content">虚拟显示器正在运行</string>
+    <string name="toast_media_projection_required">需要屏幕录制权限才能激活 PC 模式</string>
+    <string name="toast_virtual_display_started">虚拟显示器已创建,尝试激活 PC 模式</string>
+    <string name="toast_virtual_display_stopped">已停止虚拟显示器</string>
+    <string name="toast_virtual_display_failed">创建虚拟显示器失败: %1$s</string>
+    <string name="toast_virtual_display_not_running">虚拟显示器未运行</string>
+    <string name="toast_media_projection_lost">屏幕录制权限已被撤销,虚拟显示器已停止</string>
 </resources>

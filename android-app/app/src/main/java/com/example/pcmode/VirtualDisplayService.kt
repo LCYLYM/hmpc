@@ -25,6 +25,7 @@ class VirtualDisplayService : Service() {
     private var mediaProjection: MediaProjection? = null
     private var virtualDisplay: VirtualDisplay? = null
     private var imageReader: ImageReader? = null
+    private var mediaProjectionCallback: MediaProjection.Callback? = null
     
     companion object {
         private const val TAG = "VirtualDisplayService"
@@ -36,6 +37,12 @@ class VirtualDisplayService : Service() {
         private const val VIRTUAL_DISPLAY_WIDTH = 1920  // 1080p 宽度
         private const val VIRTUAL_DISPLAY_HEIGHT = 1080 // 1080p 高度
         private const val VIRTUAL_DISPLAY_DPI = 160     // 标准 DPI
+    const val ACTION_STATE_CHANGED = "com.example.pcmode.ACTION_VIRTUAL_DISPLAY_STATE"
+    const val EXTRA_IS_RUNNING = "extra_is_running"
+    const val EXTRA_STATUS_MESSAGE = "extra_status_message"
+    const val EXTRA_ERROR_MESSAGE = "extra_error_message"
+    const val EXTRA_RESULT_CODE = "extra_result_code"
+    const val EXTRA_RESULT_DATA = "extra_result_data"
         
         var isRunning = false
             private set
@@ -56,17 +63,26 @@ class VirtualDisplayService : Service() {
         startForeground(NOTIFICATION_ID, notification)
         
         // 获取 MediaProjection 参数
-        val resultCode = intent?.getIntExtra("resultCode", -1) ?: -1
-        val data = intent?.getParcelableExtra<Intent>("data")
+        val resultCode = intent?.getIntExtra(EXTRA_RESULT_CODE, Activity.RESULT_CANCELED)
+            ?: Activity.RESULT_CANCELED
+        val data = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent?.getParcelableExtra(EXTRA_RESULT_DATA, Intent::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            intent?.getParcelableExtra<Intent>(EXTRA_RESULT_DATA)
+        }
         
-        if (resultCode != -1 && data != null) {
+        if (resultCode == Activity.RESULT_OK && data != null) {
             startMediaProjection(resultCode, data)
         } else {
             Log.e(TAG, "Invalid intent data")
+            sendStateBroadcast(
+                isRunning = false,
+                statusMessage = getString(R.string.status_inactive),
+                errorMessage = getString(R.string.toast_media_projection_required)
+            )
             stopSelf()
         }
-        
-        isRunning = true
         return START_NOT_STICKY
     }
 
@@ -116,18 +132,36 @@ class VirtualDisplayService : Service() {
         try {
             mediaProjection = mediaProjectionManager.getMediaProjection(resultCode, data)
             
-            mediaProjection?.registerCallback(object : MediaProjection.Callback() {
+            if (mediaProjection == null) {
+                Log.e(TAG, "MediaProjection is null after authorization")
+                sendStateBroadcast(
+                    isRunning = false,
+                    statusMessage = getString(R.string.status_inactive),
+                    errorMessage = getString(R.string.toast_media_projection_required)
+                )
+                stopSelf()
+                return
+            }
+
+            mediaProjectionCallback = object : MediaProjection.Callback() {
                 override fun onStop() {
                     super.onStop()
                     Log.d(TAG, "MediaProjection stopped")
-                    cleanupResources()
+                    cleanupResources(getString(R.string.toast_media_projection_lost))
                     stopSelf()
                 }
-            }, null)
+            }
+
+            mediaProjectionCallback?.let { callback ->
+                mediaProjection?.registerCallback(callback, null)
+            }
             
             createVirtualDisplay()
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start MediaProjection", e)
+            cleanupResources(e.localizedMessage?.let {
+                getString(R.string.toast_virtual_display_failed, it)
+            })
             stopSelf()
         }
     }
@@ -186,12 +220,18 @@ class VirtualDisplayService : Service() {
             if (virtualDisplay != null) {
                 Log.i(TAG, "Virtual display created successfully")
                 logDisplayInfo()
+                isRunning = true
+                sendStateBroadcast(true, getString(R.string.status_active))
             } else {
                 Log.e(TAG, "Failed to create virtual display")
+                cleanupResources(getString(R.string.toast_virtual_display_failed, "unknown"))
                 stopSelf()
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error creating virtual display", e)
+            cleanupResources(e.localizedMessage?.let {
+                getString(R.string.toast_virtual_display_failed, it)
+            })
             stopSelf()
         }
     }
@@ -215,24 +255,56 @@ class VirtualDisplayService : Service() {
     /**
      * 清理资源
      */
-    private fun cleanupResources() {
+    private fun cleanupResources(message: String? = null) {
+        val wasRunning = isRunning
         virtualDisplay?.release()
         virtualDisplay = null
         
         imageReader?.close()
         imageReader = null
         
-        mediaProjection?.stop()
+        mediaProjectionCallback?.let { callback ->
+            try {
+                mediaProjection?.unregisterCallback(callback)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to unregister MediaProjection callback", e)
+            }
+        }
+        mediaProjectionCallback = null
+
+        try {
+            mediaProjection?.stop()
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to stop MediaProjection", e)
+        }
         mediaProjection = null
         
         isRunning = false
         
         Log.d(TAG, "Resources cleaned up")
+
+        if (wasRunning || message != null) {
+            sendStateBroadcast(
+                isRunning = false,
+                statusMessage = getString(R.string.status_inactive),
+                errorMessage = message
+            )
+        }
     }
 
     override fun onDestroy() {
         super.onDestroy()
         Log.d(TAG, "Service destroyed")
         cleanupResources()
+    }
+
+    private fun sendStateBroadcast(isRunning: Boolean, statusMessage: String, errorMessage: String? = null) {
+        val intent = Intent(ACTION_STATE_CHANGED).apply {
+            setPackage(packageName)
+            putExtra(EXTRA_IS_RUNNING, isRunning)
+            putExtra(EXTRA_STATUS_MESSAGE, statusMessage)
+            errorMessage?.let { putExtra(EXTRA_ERROR_MESSAGE, it) }
+        }
+        sendBroadcast(intent)
     }
 }
