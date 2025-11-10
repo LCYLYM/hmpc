@@ -1,0 +1,68 @@
+
+
+# Android Studio 相关
+*.iml
+.gradle
+/local.properties
+/.idea/
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+
+# Android app 构建输出
+android-app/build/
+android-app/app/build/
+android-app/.gradle/
+android-app/local.properties
+
+# Gradle 相关
+.gradle/
+build/
+gradle-app.setting
+!gradle-wrapper.jar
+
+# Android 构建输出
+*.apk
+*.ap_
+*.aab
+
+# 日志文件
+*.log
+
+# 生成的文件
+bin/
+gen/
+out/
+
+# Keystore 文件
+*.jks
+*.keystore
+
+# 临时文件
+*~
+*.swp
+*.swo
+
+# OS 相关
+.DS_Store
+Thumbs.db
+
+# IntelliJ
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+
+# Eclipse
+.classpath
+.project
+.settings/
+
+# VS Code
+.vscode/
+
+# Ignore vscode AI rules
+.github\instructions\codacy.instructions.md

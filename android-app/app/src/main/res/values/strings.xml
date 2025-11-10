@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">PC 模式激活器</string>
+    
+    <!-- 主界面 -->
+    <string name="description">通过创建虚拟显示器来激活平板的 PC 模式,无需连接外部显示器</string>
+    <string name="status_inactive">状态: 未激活</string>
+    <string name="activate_pc_mode">激活 PC 模式</string>
+    <string name="deactivate_pc_mode">停用 PC 模式</string>
+    <string name="hint">注意: 此功能需要授予屏幕录制权限。某些设备可能不支持此功能。</string>
+    
+    <!-- 通知 -->
+    <string name="notification_title">PC 模式已激活</string>
+    <string name="notification_content">虚拟显示器正在运行</string>
+</resources>
