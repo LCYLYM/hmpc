@@ -6,21 +6,21 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.media.projection.MediaProjectionManager
-import android.os.Bundle
 import android.os.Build
-import android.widget.Button
+import android.os.Bundle
 import android.view.View
+import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.Spinner
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
-
 import com.google.android.material.switchmaterial.SwitchMaterial
-private const val RECEIVER_ACTION = VirtualDisplayService.ACTION_STATE_CHANGED
+
 private const val RECEIVER_STATE_ACTION = VirtualDisplayService.ACTION_STATE_CHANGED
 private const val RECEIVER_PREVIEW_ACTION = VirtualDisplayService.ACTION_PREVIEW_FRAME
 /**
@@ -41,16 +41,16 @@ class MainActivity : AppCompatActivity() {
     private lateinit var profileSpinner: Spinner
     private lateinit var profileAdapter: ArrayAdapter<String>
     private var isReceiverRegistered = false
-
-    private val serviceStateReceiver = object : BroadcastReceiver() {
     private var isPreviewReceiverRegistered = false
     private var previewEnabled = false
     private var currentProfileIndex = 0
     private val displayProfiles = DisplayProfile.defaultProfiles()
-        override fun onReceive(context: Context?, intent: Intent?) {
-            if (intent?.action != RECEIVER_ACTION) return
 
+    private val serviceStateReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action != RECEIVER_STATE_ACTION) return
+
+            val isRunning = VirtualDisplayService.isRunning
             val statusMessage = intent.getStringExtra(VirtualDisplayService.EXTRA_STATUS_MESSAGE)
             val errorMessage = intent.getStringExtra(VirtualDisplayService.EXTRA_ERROR_MESSAGE)
 
@@ -63,13 +63,14 @@ class MainActivity : AppCompatActivity() {
             activateButton.isEnabled = !isRunning
             deactivateButton.isEnabled = isRunning
 
-            when {
             previewSwitch.isEnabled = isRunning
             if (!isRunning) {
                 previewSwitch.isChecked = false
                 previewEnabled = false
                 togglePreviewContainer(false)
             }
+
+            when {
                 errorMessage != null -> Toast.makeText(this@MainActivity, errorMessage, Toast.LENGTH_LONG).show()
                 isRunning && !lastKnownServiceState -> Toast.makeText(
                     this@MainActivity,
@@ -111,7 +112,6 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         private const val REQUEST_MEDIA_PROJECTION = 1001
-        private const val TAG = "MainActivity"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -314,7 +314,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun initProfileSpinner() {
         val labels = displayProfiles.map { getString(it.labelRes) }
-        profileAdapter = ArrayAdapter(
+        profileAdapter = ArrayAdapter<String>(
             this,
             android.R.layout.simple_spinner_item,
             labels
@@ -322,12 +322,12 @@ class MainActivity : AppCompatActivity() {
             it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         }
         profileSpinner.adapter = profileAdapter
-        profileSpinner.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: View?, position: Int, id: Long) {
+        profileSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
                 currentProfileIndex = position
             }
 
-            override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {
+            override fun onNothingSelected(parent: AdapterView<*>?) {
                 // no-op
             }
         }
